@@ -95,7 +95,7 @@ export function parseDate(s: string | undefined): string {
   return isNaN(d.getTime()) ? '' : d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-const norm = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, '');
+const norm = (h: string) => String(h).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /** Trouve la ligne d'en-tête (dans les 30 premières) contenant toutes les colonnes demandées. */
 function findHeader(rows: string[][], required: string[]): number {
@@ -138,47 +138,57 @@ const leg = (asset: string, qty: number): Leg | undefined => (isFinite(qty) && M
 // ------------------------------------------------------------------ Coinbase
 const CB_INCOME: [RegExp, IncomeType][] = [
   [/staking|inflation/, 'staking'], [/airdrop/, 'airdrop'], [/interest/, 'interest'],
-  [/reward|earn|learning|incentive|rebate|bonus|cashback/, 'reward'],
+  [/reward|earn|learning|incentive|rebate|bonus|cashback|price improvement/, 'reward'],
 ];
 const CB_INTERNAL = /^(pro deposit|pro withdrawal|exchange deposit|exchange withdrawal|retail staking transfer|retail unstaking transfer|staking transfer|unstaking transfer|retail eth2 deprecation|coinbase pro deposit|coinbase pro withdrawal)$/;
 
 function parseCoinbase(rows: string[][], hi: number): ParseResult {
   const g = indexer(rows[hi]);
   const res: ParseResult = { format: 'Coinbase – historique des transactions', platform: 'Coinbase', txs: [], rows: 0, ignored: 0, unknown: {}, warnings: [] };
-  for (const row of rows.slice(hi + 1)) {
+  const body = rows.slice(hi + 1);
+  // Conversions au format 2025+ : deux lignes (actif donné, actif reçu) partagent la même note ; l'écart (spread) est sur la ligne « reçu »
+  const convertSpread = new Map<string, number>();
+  for (const row of body) {
+    if ((g(row, 'Transaction Type') || '').trim().toLowerCase() !== 'convert') continue;
+    const m = /Converted\s+([\d.,]+)\s+(\w+)\s+to/i.exec(g(row, 'Notes') || '');
+    if (m && normSymbol(g(row, 'Asset') || '') !== normSymbol(m[2])) convertSpread.set((g(row, 'Notes') || '') + '|' + (g(row, 'Timestamp') || '').slice(0, 16), Math.abs(parseAmount(g(row, 'Fees and/or Spread', 'Fees'))) || 0);
+  }
+  for (const row of body) {
     const type = (g(row, 'Transaction Type') || '').trim();
     const date = parseDate(g(row, 'Timestamp'));
     if (!type || !date) continue;
     res.rows++;
     const tl = type.toLowerCase();
     const asset = normSymbol(g(row, 'Asset') || '');
-    const q = Math.abs(parseAmount(g(row, 'Quantity Transacted')));
+    const signed = parseAmount(g(row, 'Quantity Transacted'));
+    const q = Math.abs(signed);
     const cur = normSymbol(g(row, 'Price Currency', 'Spot Price Currency') || 'USD');
     const px = Math.abs(parseAmount(g(row, 'Price at Transaction', 'Spot Price at Transaction')));
     let sub = Math.abs(parseAmount(g(row, 'Subtotal')));
-    const fees = Math.abs(parseAmount(g(row, 'Fees and/or Spread', 'Fees')));
+    const total = Math.abs(parseAmount(g(row, 'Total (inclusive of fees and/or spread)', 'Total')));
+    const fees = Math.abs(parseAmount(g(row, 'Fees and/or Spread', 'Fees'))) || 0;
     const notes = g(row, 'Notes') || '';
     if (!isFinite(sub) && isFinite(px) && isFinite(q)) sub = px * q;
     const usdOf = (v: number) => (cur === 'USD' && isFinite(v) ? v : undefined);
     const base = { date, platform: 'Coinbase', src: 'coinbase', note: notes || undefined } as const;
-    const feeLeg = isFinite(fees) && fees > 0 ? leg(cur, fees) : undefined;
 
-    if (/^(advanced trade )?buy$|^buy$/.test(tl)) {
-      const m = /Bought\s+([\d.,]+)\s+(\w+)\s+for\s+([\d.,]+)\s+(\w+)/i.exec(notes);
+    const isBuy = /^(advanced trade )?buy$/.test(tl), isSell = /^(advanced trade )?sell$/.test(tl);
+    if (isBuy || isSell) {
+      // La note donne la vraie contrepartie (USDC, EUR…) ; son montant est le TOTAL frais compris (achat) ou net de frais (vente).
+      // On le ramène au sous-total et aux frais avec le rapport note ÷ total, ce qui garde tout dans la devise réellement payée.
+      const m = (isBuy ? /Bought\s+([\d.,]+)\s+(\w+)\s+for\s+([\d.,]+)\s+(\w+)/i : /Sold\s+([\d.,]+)\s+(\w+)\s+for\s+([\d.,]+)\s+(\w+)/i).exec(notes);
       const quote = m ? normSymbol(m[4]) : cur;
-      const outQty = m && quote !== cur ? parseAmount(m[3]) : sub;
-      const fee = feeLeg && quote !== cur && !isFiat(quote) ? leg(quote, fees) : feeLeg;
-      res.txs.push({ ...base, kind: 'trade', inLeg: leg(asset, q), outLeg: leg(quote, outQty), fee, usd: usdOf(sub), feeUsd: usdOf(fees) });
-    } else if (/^(advanced trade )?sell$/.test(tl)) {
-      const m = /Sold\s+([\d.,]+)\s+(\w+)\s+for\s+([\d.,]+)\s+(\w+)/i.exec(notes);
-      const quote = m ? normSymbol(m[4]) : cur;
-      const inQty = m && quote !== cur ? parseAmount(m[3]) : sub;
-      const fee = feeLeg && quote !== cur && !isFiat(quote) ? leg(quote, fees) : feeLeg;
-      res.txs.push({ ...base, kind: 'trade', outLeg: leg(asset, q), inLeg: leg(quote, inQty), fee, usd: usdOf(sub), feeUsd: usdOf(fees) });
+      const r = m && quote !== cur && total > 0 ? parseAmount(m[3]) / total : 1;
+      const cashQty = sub * r, feeQty = fees * r;
+      const cashLeg = leg(quote, cashQty), fee = feeQty > 0 ? leg(quote, feeQty) : undefined;
+      if (isBuy) res.txs.push({ ...base, kind: 'trade', inLeg: leg(asset, q), outLeg: cashLeg, fee, usd: usdOf(sub), feeUsd: usdOf(fees) });
+      else res.txs.push({ ...base, kind: 'trade', outLeg: leg(asset, q), inLeg: cashLeg, fee, usd: usdOf(sub), feeUsd: usdOf(fees) });
     } else if (tl === 'convert') {
       const m = /Converted\s+([\d.,]+)\s+(\w+)\s+to\s+([\d.,]+)\s+(\w+)/i.exec(notes);
       if (!m) { res.unknown['Convert (note illisible)'] = (res.unknown['Convert (note illisible)'] || 0) + 1; continue; }
-      res.txs.push({ ...base, kind: 'trade', outLeg: leg(m[2], parseAmount(m[1])), inLeg: leg(m[4], parseAmount(m[3])), usd: usdOf(sub), feeUsd: usdOf(fees) });
+      if (asset !== normSymbol(m[2])) continue; // ligne « reçu » d'une conversion en deux lignes : déjà comptée avec la ligne « donné »
+      const spread = convertSpread.get(notes + '|' + (g(row, 'Timestamp') || '').slice(0, 16)) ?? fees;
+      res.txs.push({ ...base, kind: 'trade', outLeg: leg(m[2], parseAmount(m[1])), inLeg: leg(m[4], parseAmount(m[3])), usd: usdOf(sub), feeUsd: usdOf(spread) || undefined });
     } else if (tl === 'send' || tl === 'withdrawal' && !isFiat(asset)) {
       res.txs.push({ ...base, kind: 'transfer_out', outLeg: leg(asset, q), usd: usdOf(sub) });
     } else if (tl === 'receive' || tl === 'deposit' && !isFiat(asset)) {
@@ -187,10 +197,13 @@ function parseCoinbase(rows: string[][], hi: number): ParseResult {
       res.txs.push({ ...base, kind: 'cash_in', inLeg: leg(asset, q) });
     } else if (/^(fiat )?withdrawal$/.test(tl)) {
       res.txs.push({ ...base, kind: 'cash_out', outLeg: leg(asset, q) });
+    } else if (tl === 'subscription' && signed < 0) {
+      // abonnement Coinbase One payé en crypto : sortie de jetons, comptée comme frais
+      res.txs.push({ ...base, kind: 'fee', fee: leg(asset, q), feeUsd: usdOf(sub), note: 'Abonnement Coinbase' });
     } else if (CB_INTERNAL.test(tl)) {
       res.ignored++;
     } else {
-      const inc = CB_INCOME.find(([re]) => re.test(tl));
+      const inc = signed >= 0 ? CB_INCOME.find(([re]) => re.test(tl)) : undefined;
       if (inc) res.txs.push({ ...base, kind: 'income', incomeType: inc[1], inLeg: leg(asset, q), usd: usdOf(isFinite(sub) ? sub : px * q) });
       else res.unknown[type] = (res.unknown[type] || 0) + 1;
     }
@@ -199,51 +212,94 @@ function parseCoinbase(rows: string[][], hi: number): ParseResult {
 }
 
 // ------------------------------------------------------------------ Binance : historique des transactions (relevé)
+// En-têtes anglais (UTC_Time, Operation, Coin, Change) ou français (Durée, Opération, Jeton, Change), CSV ou Excel.
 const BN_FEE = /^(fee|transaction fee|trading fee)$/;
-const BN_TRADE = /^(buy|sell|transaction related|transaction buy|transaction spend|transaction sold|transaction revenue|large otc trading|binance convert|convert|small assets exchange bnb|small assets exchange|buy crypto|auto-invest transaction|eth 2\.0 staking|asset conversion transfer|stablecoins auto-conversion|token swap - redenomination\/rebranding|token swap - distribution|leverage token redemption)$/;
+const BN_TRADE = /^(buy|sell|transaction related|transaction buy|transaction spend|transaction sold|transaction revenue|large otc trading|binance convert|convert|small assets exchange bnb|small assets exchange|buy crypto|buy crypto with card|buy crypto with fiat|auto-invest transaction|eth 2\.0 staking|asset conversion transfer|stablecoins auto-conversion|token swap - redenomination\/rebranding|leverage token redemption)$/;
+/** Opérations dont les deux jambes peuvent être espacées de plusieurs minutes (plan d'investissement, achat par carte). */
+const BN_DEFERRED = /^(auto-invest transaction|buy crypto with fiat|buy crypto with card|buy crypto)$/;
 const BN_INTERNAL = /subscription|redemption|purchase|transfer between|account transfer|^transfer_(in|out)$|transfer funds|main and funding|funding account|sub-account|to spot|to funding|principal|internal transfer|isolated margin|cross margin|margin transfer|dual investment|collateral/;
 const BN_INCOME: [RegExp, IncomeType][] = [
   [/staking|pos savings|eth 2\.0|bnb vault|launchpool|megadrop|hodler/, 'staking'], [/airdrop|distribution/, 'airdrop'],
-  [/interest|savings|earn/, 'interest'], [/reward|commission|referral|kickback|cashback|voucher|crypto box|mission|bonus|rebate|gift/, 'reward'],
+  [/interest|savings|earn/, 'interest'], [/reward|commission|referral|kickback|cashback|voucher|crypto box|mission|bonus|rebate|gift|vega/, 'reward'],
 ];
 
 function parseBinanceLedger(rows: string[][], hi: number): ParseResult {
   const g = indexer(rows[hi]);
   const res: ParseResult = { format: 'Binance – historique des transactions', platform: 'Binance', txs: [], rows: 0, ignored: 0, unknown: {}, warnings: [] };
-  type Row = { date: string; op: string; opRaw: string; coin: string; change: number };
-  const groups = new Map<string, Row[]>();
+  type Row = { date: string; t: number; op: string; opRaw: string; coin: string; change: number };
+  const tradeRows: Row[] = [];
+  const earnRows: Row[] = [];
   const base = (date: string) => ({ date, platform: 'Binance', src: 'binance' } as const);
   for (const row of rows.slice(hi + 1)) {
-    const date = parseDate(g(row, 'UTC_Time', 'Time', 'Date(UTC)'));
-    const opRaw = (g(row, 'Operation') || '').trim();
-    const coin = normSymbol(g(row, 'Coin') || '');
-    const change = parseAmount(g(row, 'Change'));
+    const date = parseDate(g(row, 'UTC_Time', 'Time', 'Date(UTC)', 'Durée', 'Date'));
+    const opRaw = (g(row, 'Operation', 'Opération') || '').trim();
+    const coin = normSymbol(g(row, 'Coin', 'Jeton', 'Asset') || '');
+    const change = parseAmount(g(row, 'Change', 'Variation', 'Montant'));
     if (!date || !opRaw || !coin || !isFinite(change)) continue;
     res.rows++;
     if (change === 0) { res.ignored++; continue; }
     const op = opRaw.toLowerCase();
-    const r: Row = { date, op, opRaw, coin, change };
-    if (BN_FEE.test(op) || BN_TRADE.test(op)) {
-      const k = date;
-      let arr = groups.get(k);
-      if (!arr) groups.set(k, (arr = []));
-      arr.push(r);
-      continue;
-    }
-    if (/^(deposit|fiat deposit|crypto deposit)$/.test(op) || (op === 'deposit' && change > 0)) {
+    const r: Row = { date, t: Date.parse(date), op, opRaw, coin, change };
+    if (BN_FEE.test(op) || BN_TRADE.test(op)) { tradeRows.push(r); continue; }
+    if (/^(deposit|fiat deposit|crypto deposit|fiat ocbs - add fiat and fees)$/.test(op) && change > 0) {
       res.txs.push({ ...base(date), kind: isFiat(coin) ? 'cash_in' : 'transfer_in', inLeg: leg(coin, change) });
-    } else if (/^(withdraw|withdrawal|fiat withdraw|fiat withdrawal|crypto withdrawal|send)$/.test(op)) {
-      res.txs.push({ ...base(date), kind: isFiat(coin) ? 'cash_out' : 'transfer_out', outLeg: leg(coin, change) });
-    } else if (BN_INTERNAL.test(op)) {
+    } else if (/^(withdraw|withdrawal|fiat withdraw|fiat withdrawal|crypto withdrawal|send|asset recovery)$/.test(op)) {
+      res.txs.push({ ...base(date), kind: isFiat(coin) ? 'cash_out' : 'transfer_out', outLeg: leg(coin, change), note: opRaw === 'Asset Recovery' ? 'Jeton retiré par Binance (Asset Recovery)' : undefined });
+    } else if (op === 'transfer') {
+      // transfert sans précision : interne (rapproché automatiquement) ou vers l'extérieur
+      res.txs.push(change > 0 ? { ...base(date), kind: 'transfer_in', inLeg: leg(coin, change), note: opRaw } : { ...base(date), kind: 'transfer_out', outLeg: leg(coin, change), note: opRaw });
+    } else if (/subscription|redemption|purchase/.test(op) && !/gift card/.test(op)) {
+      // Earn / staking : on suit le montant placé ; ce qui revient en plus au remboursement est un intérêt
+      earnRows.push(r);
+    } else if (BN_INTERNAL.test(op) && !/gift card/.test(op)) {
       res.ignored++;
     } else {
-      const inc = change > 0 ? BN_INCOME.find(([re]) => re.test(op)) : undefined;
+      const inc = change > 0 ? BN_INCOME.find(([re]) => re.test(op)) || (/^token swap - distribution$/.test(op) ? [null, 'airdrop' as IncomeType] : undefined) : undefined;
       if (inc) res.txs.push({ ...base(date), kind: 'income', incomeType: inc[1], inLeg: leg(coin, change), note: opRaw });
       else res.unknown[opRaw] = (res.unknown[opRaw] || 0) + 1;
     }
   }
-  // regroupement des lignes d'un même échange (même seconde)
-  for (const [date, arr] of groups) {
+  // 0. placements Earn : solde placé par crypto ; un remboursement supérieur au placé = intérêts non détaillés ailleurs
+  const placed = new Map<string, number>();
+  for (const r of earnRows.sort((a, b) => a.t - b.t)) {
+    const cur = (placed.get(r.coin) || 0) - r.change;
+    if (cur < -1e-12) {
+      res.txs.push({ ...base(r.date), kind: 'income', incomeType: 'interest', inLeg: { asset: r.coin, qty: -cur }, note: r.opRaw + ' (intérêts inclus dans le remboursement)' });
+      placed.set(r.coin, 0);
+    } else placed.set(r.coin, cur);
+    res.ignored++;
+  }
+  // 1. regroupement des lignes d'un même échange (même seconde, à 2 s près)
+  tradeRows.sort((a, b) => a.t - b.t);
+  const clusters: Row[][] = [];
+  for (const r of tradeRows) {
+    const c = clusters[clusters.length - 1];
+    if (c && r.t - c[c.length - 1].t <= 2000) c.push(r); else clusters.push([r]);
+  }
+  type Side = { date: string; t: number; op: string; legs: Leg[]; fees: Leg[]; note: string };
+  const deferred: { side: 'in' | 'out'; s: Side }[] = [];
+  const emitPair = (date: string, pos: Leg[], neg: Leg[], fees: Leg[], note: string) => {
+    const out: NewTx[] = [];
+    if (pos.length === 1) {
+      for (const n of neg) out.push({ ...base(date), kind: 'trade', outLeg: n, inLeg: { asset: pos[0].asset, qty: pos[0].qty / neg.length }, note });
+      if (neg.length > 1) res.warnings.push(`Conversion groupée du ${date.slice(0, 10)} (${neg.map((n) => n.asset).join(', ')} → ${pos[0].asset}) : répartie à parts égales.`);
+    } else if (neg.length === 1) {
+      for (const p of pos) out.push({ ...base(date), kind: 'trade', outLeg: { asset: neg[0].asset, qty: neg[0].qty / pos.length }, inLeg: p, note });
+      res.warnings.push(`Achat groupé du ${date.slice(0, 10)} (${neg[0].asset} → ${pos.map((p) => p.asset).join(', ')}) : montant réparti à parts égales entre les cryptos.`);
+    } else {
+      const n = Math.min(pos.length, neg.length);
+      for (let i = 0; i < n; i++) out.push({ ...base(date), kind: 'trade', outLeg: neg[i], inLeg: pos[i], note });
+      for (const p of pos.slice(n)) out.push({ ...base(date), kind: 'transfer_in', inLeg: p, note });
+      for (const x of neg.slice(n)) out.push({ ...base(date), kind: 'transfer_out', outLeg: x, note });
+      res.warnings.push(`Opérations multiples à la même seconde le ${date.slice(0, 10)} : associées au mieux, à vérifier dans le journal.`);
+    }
+    const f = [...fees];
+    if (out.length && f.length) out[0].fee = f.shift();
+    for (const x of f) out.push({ ...base(date), kind: 'fee', fee: x, note: 'Frais' });
+    res.txs.push(...out);
+  };
+  for (const arr of clusters) {
+    const date = arr[0].date;
     const net = new Map<string, number>();
     const fees = new Map<string, number>();
     for (const r of arr) {
@@ -252,34 +308,56 @@ function parseBinanceLedger(rows: string[][], hi: number): ParseResult {
     }
     const pos = [...net].filter(([, v]) => v > 1e-15).map(([a, v]) => ({ asset: a, qty: v }));
     const neg = [...net].filter(([, v]) => v < -1e-15).map(([a, v]) => ({ asset: a, qty: -v }));
-    const note = [...new Set(arr.filter((r) => !BN_FEE.test(r.op)).map((r) => r.opRaw))].join(', ');
-    const out: NewTx[] = [];
-    if (pos.length && neg.length) {
-      if (pos.length === 1) {
-        // un actif reçu contre un ou plusieurs actifs donnés (ex. conversion des poussières en BNB)
-        const tot = neg.reduce((s, x) => s + x.qty, 0);
-        for (const n of neg) out.push({ ...base(date), kind: 'trade', outLeg: n, inLeg: { asset: pos[0].asset, qty: neg.length === 1 ? pos[0].qty : pos[0].qty / neg.length }, note });
-        if (neg.length > 1) res.warnings.push(`Conversion groupée du ${date.slice(0, 10)} (${neg.map((n) => n.asset).join(', ')} → ${pos[0].asset}) : répartie à parts égales.`);
-        void tot;
-      } else if (neg.length === 1) {
-        for (const p of pos) out.push({ ...base(date), kind: 'trade', outLeg: { asset: neg[0].asset, qty: neg[0].qty / pos.length }, inLeg: p, note });
-        res.warnings.push(`Plusieurs achats à la même seconde le ${date.slice(0, 10)} (${pos.map((p) => p.asset).join(', ')}) : montant ${neg[0].asset} réparti à parts égales.`);
-      } else {
-        const n = Math.min(pos.length, neg.length);
-        for (let i = 0; i < n; i++) out.push({ ...base(date), kind: 'trade', outLeg: neg[i], inLeg: pos[i], note });
-        for (const p of pos.slice(n)) out.push({ ...base(date), kind: 'transfer_in', inLeg: p, note });
-        for (const x of neg.slice(n)) out.push({ ...base(date), kind: 'transfer_out', outLeg: x, note });
-        res.warnings.push(`Opérations multiples à la même seconde le ${date.slice(0, 10)} : associées au mieux, à vérifier dans le journal.`);
-      }
-    } else if (pos.length) {
-      for (const p of pos) out.push({ ...base(date), kind: 'transfer_in', inLeg: p, note: note + ' (contrepartie absente du relevé)' });
-    } else if (neg.length) {
-      for (const x of neg) out.push({ ...base(date), kind: 'transfer_out', outLeg: x, note: note + ' (contrepartie absente du relevé)' });
+    const feeLegs = [...fees].map(([asset, qty]) => ({ asset, qty }));
+    const ops = [...new Set(arr.filter((r) => !BN_FEE.test(r.op)).map((r) => r.opRaw))];
+    const note = ops.join(', ');
+    if (pos.length && neg.length) { emitPair(date, pos, neg, feeLegs, note); continue; }
+    const isDeferred = ops.length > 0 && ops.every((o) => BN_DEFERRED.test(o.toLowerCase()));
+    if (isDeferred && (pos.length || neg.length)) {
+      deferred.push({ side: pos.length ? 'in' : 'out', s: { date, t: arr[0].t, op: ops[0].toLowerCase(), legs: pos.length ? pos : neg, fees: feeLegs, note } });
+      continue;
     }
-    const feeList = [...fees].map(([asset, qty]) => ({ asset, qty }));
-    if (out.length && feeList.length) out[0].fee = feeList.shift();
-    for (const f of feeList) out.push({ ...base(date), kind: 'fee', fee: f, note: 'Frais' });
-    res.txs.push(...out);
+    for (const p of pos) res.txs.push({ ...base(date), kind: 'transfer_in', inLeg: p, note: note + ' (contrepartie absente du relevé)' });
+    for (const x of neg) res.txs.push({ ...base(date), kind: 'transfer_out', outLeg: x, note: note + ' (contrepartie absente du relevé)' });
+    for (const f of feeLegs) res.txs.push({ ...base(date), kind: 'fee', fee: f, note: 'Frais' });
+  }
+  // 2. jambes décalées (plan Auto-Invest : le montant part, les cryptos arrivent 5 à 60 min plus tard)
+  type Batch = { outs: Side[]; ins: Side[]; start: number };
+  const byOp = new Map<string, typeof deferred>();
+  for (const d of deferred) { const k = d.s.op; if (!byOp.has(k)) byOp.set(k, []); byOp.get(k)!.push(d); }
+  for (const list of byOp.values()) {
+    let batch: Batch | null = null;
+    const close = () => {
+      if (!batch) return;
+      const { outs, ins } = batch;
+      if (outs.length && ins.length) {
+        if (outs.length === ins.length) outs.forEach((o, i) => emitPair(ins[i].date, ins[i].legs, o.legs, [...o.fees, ...ins[i].fees], ins[i].note));
+        else {
+          // un montant réparti sur plusieurs cryptos : on additionne ce qui est parti, réparti à parts égales
+          const spent = new Map<string, number>();
+          for (const o of outs) for (const l of o.legs) spent.set(l.asset, (spent.get(l.asset) || 0) + l.qty);
+          const negLegs = [...spent].map(([asset, qty]) => ({ asset, qty }));
+          for (const i of ins) emitPair(i.date, i.legs, negLegs.map((l) => ({ asset: l.asset, qty: l.qty / ins.length })), i.fees, i.note);
+          if (ins.length > 1) res.warnings.push(`Plan d'investissement du ${ins[0].date.slice(0, 10)} (${negLegs.map((l) => l.asset).join(', ')} → ${ins.map((i) => i.legs.map((l) => l.asset).join('+')).join(', ')}) : montant réparti à parts égales entre les cryptos (répartition réelle du plan inconnue).`);
+        }
+      } else {
+        for (const i of ins) for (const l of i.legs) res.txs.push({ ...base(i.date), kind: 'transfer_in', inLeg: l, note: i.note + ' (montant payé non fourni par le relevé)' });
+        for (const o of outs) for (const l of o.legs) res.txs.push({ ...base(o.date), kind: 'transfer_out', outLeg: l, note: o.note + ' (cryptos reçues introuvables)' });
+      }
+      batch = null;
+    };
+    for (const d of list.sort((a, b) => a.s.t - b.s.t)) {
+      if (d.side === 'out') {
+        if (batch && (batch.ins.length || d.s.t - batch.outs[batch.outs.length - 1].t > 5 * 60e3)) close();
+        if (!batch) batch = { outs: [], ins: [], start: d.s.t };
+        batch.outs.push(d.s);
+      } else {
+        if (batch && d.s.t - batch.start > 3 * 3600e3) close();
+        if (!batch) batch = { outs: [], ins: [], start: d.s.t };
+        batch.ins.push(d.s);
+      }
+    }
+    close();
   }
   res.txs.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   return res;
@@ -409,7 +487,7 @@ function parseGeneric(rows: string[][], hi: number): ParseResult {
 export function parseRows(rows: string[][]): ParseResult | null {
   let hi: number;
   if ((hi = findHeader(rows, ['Timestamp', 'Transaction Type', 'Asset', 'Quantity Transacted'])) >= 0) return finish(parseCoinbase(rows, hi));
-  if ((hi = findHeader(rows, ['UTC_Time', 'Operation', 'Coin', 'Change'])) >= 0) return finish(parseBinanceLedger(rows, hi));
+  if ((hi = findHeader(rows, ['UTC_Time', 'Operation', 'Coin', 'Change'])) >= 0 || (hi = findHeader(rows, ['Durée', 'Opération', 'Jeton', 'Change'])) >= 0) return finish(parseBinanceLedger(rows, hi));
   if ((hi = findHeader(rows, ['Date(UTC)', 'Pair', 'Side'])) >= 0 || (hi = findHeader(rows, ['Date(UTC)', 'Market', 'Type'])) >= 0) return finish(parseBinanceTrades(rows, hi));
   if ((hi = findHeader(rows, ['txid', 'refid', 'time', 'type', 'asset', 'amount'])) >= 0) return finish(parseKraken(rows, hi));
   if ((hi = findHeader(rows, ['date', 'type', 'received_asset'])) >= 0) return finish(parseGeneric(rows, hi));

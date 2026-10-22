@@ -131,10 +131,11 @@ function mainAsset(t: Tx): string {
 function amountOf(t: Tx, info?: TxInfo): { text: string; cls: string } {
   const c = txCategory(t);
   const v = info?.usd;
+  const approx = info?.valueEstimated ? '≈ ' : '';
   if (c === 'buy') return { text: v === undefined ? '—' : usdSigned(-(v + (t.fee && isFiat(t.fee.asset) ? info?.feeUsd ?? 0 : 0))), cls: '' };
   if (c === 'sell') return { text: v === undefined ? '—' : usdSigned(v - (t.fee && isFiat(t.fee.asset) ? info?.feeUsd ?? 0 : 0)), cls: 'c-success' };
-  if (c === 'income') return { text: v === undefined ? 'valeur inconnue' : usdSigned(v), cls: v === undefined ? 'c-moderate' : 'c-success' };
-  if (c === 'swap') return { text: v === undefined ? 'valeur inconnue' : usd(v), cls: v === undefined ? 'c-moderate' : '' };
+  if (c === 'income') return { text: v === undefined ? 'valeur inconnue' : approx + usdSigned(v), cls: v === undefined ? 'c-moderate' : 'c-success' };
+  if (c === 'swap') return { text: v === undefined ? 'valeur inconnue' : approx + usd(v), cls: v === undefined ? 'c-moderate' : '' };
   if (c === 'cash') return { text: t.kind === 'cash_in' ? '+' + num(t.inLeg!.qty, 2) + ' ' + t.inLeg!.asset : '−' + num(t.outLeg!.qty, 2) + ' ' + t.outLeg!.asset, cls: 'c-neutral' };
   return { text: info?.paired ? 'interne' : '', cls: 'c-moderate' };
 }
@@ -264,7 +265,7 @@ export function TxSheet({ id }: { id: string }) {
         {t.outLeg && <><dt>Donné</dt><dd>{qty(t.outLeg.qty)} {t.outLeg.asset}</dd></>}
         {t.inLeg && <><dt>Reçu</dt><dd>{qty(t.inLeg.qty)} {t.inLeg.asset}</dd></>}
         {t.fee && <><dt>Frais</dt><dd>{qty(t.fee.qty)} {t.fee.asset}{info?.feeUsd ? ` (${usd(info.feeUsd)})` : ''}</dd></>}
-        {info?.usd !== undefined && <><dt>Valeur</dt><dd>{usd(info.usd)}</dd></>}
+        {info?.usd !== undefined && <><dt>Valeur</dt><dd>{info.valueEstimated ? '≈ ' : ''}{usd(info.usd)}{info.valueEstimated ? ' (estimée)' : ''}</dd></>}
         {unit !== undefined && <><dt>Prix unitaire</dt><dd>{price(unit)}</dd></>}
         {info?.realized !== undefined && <><dt>Plus-value réalisée</dt><dd className={info.realized >= 0 ? 'c-success' : 'c-critical'}>{usdSigned(info.realized)}</dd></>}
         {info?.paired && <><dt>Transfert</dt><dd className="t-caption-strong">rapproché avec l’autre plateforme</dd></>}

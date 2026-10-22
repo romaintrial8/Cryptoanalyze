@@ -92,7 +92,10 @@ export interface AssetState {
   shortfall: number; // quantité vendue/envoyée sans solde suffisant (historique incomplet ?)
 }
 
-export interface TxInfo { usd?: number; realized?: number; estimated?: boolean; paired?: boolean; feeUsd?: number }
+export interface TxInfo { usd?: number; realized?: number; estimated?: boolean; valueEstimated?: boolean; paired?: boolean; feeUsd?: number }
+
+/** Cours d'une crypto à une date (historique de marché), pour valoriser ce que l'export ne valorise pas. */
+export type PriceFn = (asset: string, day: string) => number | undefined;
 
 export interface Flow { date: string; amount: number } // < 0 : argent investi ; > 0 : argent récupéré
 
@@ -116,8 +119,12 @@ export interface DaySnapshot { date: string; qty: Record<string, number>; capita
  * Rejoue les opérations. `onDay` (facultatif) reçoit l'état à la fin de chaque jour où il s'est passé quelque chose
  * (utilisé pour la courbe « capital investi / valeur »).
  */
-export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => void): LedgerResult {
+export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => void, px?: PriceFn): LedgerResult {
   const pairs = pairTransfers(txsIn);
+  // Valeur de secours quand l'export ne donne pas de prix (intérêts Binance, achats par carte, conversions) :
+  // cours de marché du jour s'il est connu, sinon prix de vos propres opérations à ±30 jours.
+  const implied = impliedPrices(txsIn, fx);
+  const est = (a: string, day: string): number | undefined => (isUsdStable(a) ? 1 : isFiat(a) ? fxRate(fx, a, day)?.rate : px?.(a, day) ?? nearestPrice(implied.get(a), day, 30));
   const outOf = new Map<string, Tx>();
   for (const t of txsIn) outOf.set(t.id, t);
   const pairedOut = new Set(pairs.values());
@@ -179,10 +186,16 @@ export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => 
     info.set(tx.id, ti);
 
     if (tx.kind === 'trade' && inL && outL) {
-      const V = txUsd(tx, fx);
-      ti.usd = V;
+      const known = txUsd(tx, fx);
       const inCrypto = !isFiat(inL.asset), outCrypto = !isFiat(outL.asset);
       if (!inCrypto && !outCrypto) continue; // change de devises : sans effet sur le portefeuille crypto
+      let V = known;
+      if (V === undefined) {
+        const pi = est(inL.asset, day), po = est(outL.asset, day);
+        V = pi !== undefined ? pi * inL.qty : po !== undefined ? po * outL.qty : undefined;
+        if (V !== undefined) ti.valueEstimated = true;
+      }
+      ti.usd = V;
       // frais
       let feeCash = 0, feeSameIn = 0, feeCrypto = 0;
       if (fee) {
@@ -190,12 +203,12 @@ export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => 
         else if (inCrypto && fee.asset === inL.asset) feeSameIn = Math.min(fee.qty, inL.qty);
         else { feeCrypto = dispose(fee.asset, fee.qty, p, day); touch(fee.asset, day); }
       }
-      const feeUsd = tx.feeUsd ?? (feeCash || (feeSameIn && V !== undefined ? (V * feeSameIn) / inL.qty : 0) || (fee && !isFiat(fee.asset) && fee.asset !== inL.asset ? legUsd(fee, day, fx) ?? feeCrypto : 0));
+      const feeUsd = tx.feeUsd ?? (feeCash || (feeSameIn && V !== undefined ? (V * feeSameIn) / inL.qty : 0) || (fee && !isFiat(fee.asset) && fee.asset !== inL.asset ? legUsd(fee, day, fx) ?? (est(fee.asset, day) ?? 0) * fee.qty : 0) || feeCrypto);
       ti.feeUsd = feeUsd;
       r.fees += feeUsd;
       if (!outCrypto) {
         // achat avec de la monnaie
-        const paid = legUsd(outL, day, fx) ?? V ?? 0;
+        const paid = V ?? legUsd(outL, day, fx) ?? 0;
         r.fiatSpent += paid + feeCash;
         flow(day, -(paid + feeCash));
         acquire(inL.asset, inL.qty - feeSameIn, (V ?? paid) + feeCash + feeCrypto, p, day);
@@ -203,7 +216,7 @@ export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => 
         touch(inL.asset, day);
       } else if (!inCrypto) {
         // vente contre de la monnaie
-        const got = legUsd(inL, day, fx) ?? V ?? 0;
+        const got = V ?? legUsd(inL, day, fx) ?? 0;
         // part cédée absente de l'historique : coût supposé égal au prix de cession (aucun gain inventé)
         const outCost = dispose(outL.asset, outL.qty, p, day) + (V ?? got) * shortRatio;
         const proceeds = (V ?? got) - feeCash - feeCrypto;
@@ -217,9 +230,11 @@ export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => 
         // échange crypto ↔ crypto (stablecoins compris)
         const outCost = dispose(outL.asset, outL.qty, p, day) + (V ?? 0) * shortRatio;
         if (V !== undefined) {
-          const gain = V - outCost;
+          // vente contre un stablecoin avec frais prélevés sur le stablecoin : les frais réduisent le produit de la vente
+          const feeOnProceeds = feeSameIn && isUsdStable(inL.asset) ? (V * feeSameIn) / inL.qty : 0;
+          const gain = V - feeOnProceeds - outCost;
           st(outL.asset, day).realized += gain; r.realized += gain; ti.realized = gain;
-          acquire(inL.asset, inL.qty - feeSameIn, V + feeCash + feeCrypto, p, day);
+          acquire(inL.asset, inL.qty - feeSameIn, V - feeOnProceeds + feeCash + feeCrypto, p, day);
         } else {
           acquire(inL.asset, inL.qty - feeSameIn, outCost + feeCash + feeCrypto, p, day);
           if (!isUsdStable(inL.asset)) st(inL.asset, day).estimated = true;
@@ -233,7 +248,8 @@ export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => 
     }
 
     if (tx.kind === 'income' && inL) {
-      const V = txUsd(tx, fx);
+      let V = txUsd(tx, fx);
+      if (V === undefined) { const e = est(inL.asset, day); if (e !== undefined) { V = e * inL.qty; ti.valueEstimated = true; } }
       ti.usd = V;
       if (isFiat(inL.asset)) { const v = V ?? 0; r.income += v; r.fiatReceived += v; flow(day, v); continue; }
       acquire(inL.asset, inL.qty, V ?? 0, p, day);
@@ -270,7 +286,8 @@ export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => 
         acquire(inL.asset, inL.qty, kept, p, day);
         ti.paired = true;
       } else {
-        const V = tx.usd ?? legUsd(inL, day, fx);
+        let V = tx.usd ?? legUsd(inL, day, fx);
+        if (V === undefined) { const e = est(inL.asset, day); if (e !== undefined) { V = e * inL.qty; ti.valueEstimated = true; } }
         acquire(inL.asset, inL.qty, V ?? 0, p, day);
         r.unmatchedIn += V ?? 0;
         flow(day, -(V ?? 0));
@@ -283,7 +300,8 @@ export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => 
 
     if (tx.kind === 'fee' && fee && !isFiat(fee.asset)) {
       const cost = dispose(fee.asset, fee.qty, p, day);
-      const feeUsd = tx.feeUsd ?? legUsd(fee, day, fx) ?? cost;
+      const e = est(fee.asset, day);
+      const feeUsd = tx.feeUsd ?? legUsd(fee, day, fx) ?? (e !== undefined ? e * fee.qty : cost);
       r.fees += feeUsd; st(fee.asset, day).fees += feeUsd; ti.feeUsd = feeUsd;
       touch(fee.asset, day);
       continue;
@@ -387,6 +405,20 @@ export function priceAt(h: History | undefined, date: string): number | undefine
   return h[lo][1];
 }
 
+/** Cours le plus proche d'une date (avant ou après), à au plus `maxDays` jours. */
+export function nearestPrice(h: History | undefined, date: string, maxDays: number): number | undefined {
+  if (!h || !h.length) return undefined;
+  let lo = 0, hi = h.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (h[m][0] < date) lo = m + 1; else hi = m; }
+  let best: [string, number] | undefined, gap = Infinity;
+  for (const k of [lo - 1, lo]) {
+    if (k < 0 || k >= h.length) continue;
+    const g = Math.abs(Date.parse(h[k][0]) - Date.parse(date)) / 864e5;
+    if (g < gap) { gap = g; best = h[k]; }
+  }
+  return best && gap <= maxDays ? best[1] : undefined;
+}
+
 /** Cours implicites tirés des opérations (valeur USD ÷ quantité) : secours quand l'historique de marché manque. */
 export function impliedPrices(txs: Tx[], fx: FxTable): Map<string, History> {
   const m = new Map<string, History>();
@@ -410,10 +442,10 @@ function addDays(iso: string, n: number): string {
 }
 
 /** Valeur du portefeuille et capital investi, jour par jour, du premier achat à aujourd'hui. */
-export function dailySeries(txs: Tx[], fx: FxTable, hist: (asset: string) => History | undefined, today: string, current?: QuoteFn): SeriesPoint[] {
+export function dailySeries(txs: Tx[], fx: FxTable, hist: (asset: string) => History | undefined, today: string, current?: QuoteFn, px?: PriceFn): SeriesPoint[] {
   if (!txs.length) return [];
   const snaps: DaySnapshot[] = [];
-  runLedger(txs, fx, (s) => snaps.push(s));
+  runLedger(txs, fx, (s) => snaps.push(s), px);
   if (!snaps.length) return [];
   const implied = impliedPrices(txs, fx);
   const out: SeriesPoint[] = [];

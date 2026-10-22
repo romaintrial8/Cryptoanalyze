@@ -62,7 +62,7 @@ export const BUILTIN_COINS: CoinInfo[] = [
   ['gnosis', 'GNO', 'Gnosis'], ['oasis-network', 'ROSE', 'Oasis'], ['harmony', 'ONE', 'Harmony'], ['qtum', 'QTUM', 'Qtum'],
   ['nervos-network', 'CKB', 'Nervos Network'], ['trust-wallet-token', 'TWT', 'Trust Wallet'], ['vethor-token', 'VTHO', 'VeThor'], ['wrapped-solana', 'WSOL', 'Wrapped SOL'],
   ['ethereum-wormhole', 'WETH', 'Wrapped Ether'], ['virtual-protocol', 'VIRTUAL', 'Virtuals Protocol'], ['berachain-bera', 'BERA', 'Berachain'], ['movement', 'MOVE', 'Movement'],
-  ['pudgy-penguins', 'PENGU', 'Pudgy Penguins'], ['ai16z', 'AI16Z', 'ai16z'], ['fartcoin', 'FARTCOIN', 'Fartcoin'], ['story-2', 'IP', 'Story'],
+  ['space-and-time', 'SXT', 'Space and Time'], ['pixels', 'PIXEL', 'Pixels'], ['multiversx', 'EGLD', 'MultiversX (nouvel identifiant)'], ['pudgy-penguins', 'PENGU', 'Pudgy Penguins'], ['ai16z', 'AI16Z', 'ai16z'], ['fartcoin', 'FARTCOIN', 'Fartcoin'], ['story-2', 'IP', 'Story'],
 ].map(([id, symbol, name]) => ({ id, symbol, name }));
 
 /** Synonymes utilisés par certaines plateformes. */

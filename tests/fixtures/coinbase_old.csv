@@ -5,5 +5,5 @@ User,romain@example.com,0000
 
 Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
 2023-01-10T14:00:00Z,Buy,ETH,0.5,USD,1300.00,650.00,662.50,12.50,Bought 0.5000 ETH for $662.50 USD
-2023-02-10T14:00:00Z,Advanced Trade Buy,SOL,2,USD,20.00,40.00,40.24,0.24,Bought 2 SOL for 40 USDC on SOL-USDC at 20 USDC/SOL
+2023-02-10T14:00:00Z,Advanced Trade Buy,SOL,2,USD,20.00,40.00,40.24,0.24,Bought 2 SOL for 40.24 USDC on SOL-USDC at 20 USDC/SOL
 2023-03-10T14:00:00Z,Coinbase Earn,XLM,12.5,USD,0.08,1.00,1.00,0.00,Received 12.5 XLM from Coinbase Earn

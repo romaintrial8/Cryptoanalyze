@@ -37,10 +37,11 @@ test('PRU, plus-values réalisées, conversion, transfert rapproché (Coinbase +
   close(by('ETH').cost, 700);
   close(by('ETH').income, 30);
 
-  // SOL : 10 achetés 1 000 USDT, 0,01 SOL de frais, + 0,02 d'intérêts (valeur inconnue → coût 0)
+  // SOL : 10 achetés 1 000 USDT, 0,01 SOL de frais, + 0,02 d'intérêts sans prix dans l'export :
+  // valorisés au prix de l'achat de la semaine précédente (100 $) → 2 $
   close(by('SOL').qty, 10.01);
-  close(by('SOL').cost, 1000);
-  close(by('SOL').pru, 1000 / 10.01);
+  close(by('SOL').cost, 1002);
+  close(by('SOL').pru, 1002 / 10.01);
 
   const s = computeSummary(led, pos, txs.length, '2025-12-31');
   close(s.fiatSpent, 610 + 810 + 220);
@@ -48,7 +49,7 @@ test('PRU, plus-values réalisées, conversion, transfert rapproché (Coinbase +
   close(s.unmatchedIn, 1000); // 1 000 USDT déposés sans envoi correspondant
   close(s.capital, 1640 - 495 + 1000);
   close(s.realized, 235);
-  close(s.income, 31.5); // 30 $ ETH + 1,50 $ GRT
+  close(s.income, 33.5); // 30 $ ETH + 1,50 $ GRT + 2 $ SOL estimés
   close(s.fees, 10 + 10 + 5 + 7.1 + 1); // 1 $ = 0,01 SOL sur un achat de 10 SOL à 1 000 $
   const value = 0.0099 * 100000 + 0.31 * 3000 + 10.01 * 150 + 10 * 0.2 + 0.0005 * 600;
   close(s.value, value);

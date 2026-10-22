@@ -18,7 +18,7 @@ Application personnelle de suivi de portefeuille crypto, construite sur l'archit
 | `src/ui/` | Kit de composants, graphiques SVG maison, icônes, routeur par hash |
 | `src/screens/` | Un fichier par onglet |
 | `src/styles/` | `tokens.css` (charte : changer de couleurs = éditer ce fichier) et `app.css` |
-| `tests/` | 23 tests chiffrés (`npm test`) + fichiers d'export d'exemple dans `tests/fixtures/` |
+| `tests/` | 25 tests chiffrés (`npm test`) + fichiers d'export d'exemple dans `tests/fixtures/` |
 | `scripts/` | Build esbuild + service worker, robot des cours, génération des icônes |
 
 ## Commandes
