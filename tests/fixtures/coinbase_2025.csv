@@ -1,0 +1,13 @@
+Transactions
+User,Romain Exemple,1a2b3c4d-0000-0000-0000-000000000000
+ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
+65a1,2025-01-01 15:00:00 UTC,Deposit,USD,1000,USD,$1.00,"$1,000.00","$1,000.00",$0.00,Deposited 1000 USD from Bank
+65a2,2025-01-01 15:05:00 UTC,Buy,BTC,0.01,USD,"$60,000.00",$600.00,$610.00,$10.00,Bought 0.01 BTC for 610 USD
+65a3,2025-02-01 15:05:00 UTC,Buy,BTC,0.01,USD,"$80,000.00",$800.00,$810.00,$10.00,Bought 0.01 BTC for 810 USD
+65a4,2025-03-01 15:05:00 UTC,Sell,BTC,-0.005,USD,"$100,000.00",-$500.00,-$495.00,$5.00,Sold 0.005 BTC for 495 USD
+65a5,2025-04-01 12:00:00 UTC,Convert,BTC,-0.005,USD,"$90,000.00",$450.00,$450.00,$0.00,Converted 0.005 BTC to 0.2 ETH
+65a6,2025-05-01 10:00:00 UTC,Send,BTC,-0.01,USD,"$95,000.00",$950.00,$950.00,$0.00,Sent 0.01 BTC to bc1q...
+65a7,2025-06-01 00:00:00 UTC,Staking Income,ETH,0.01,USD,"$3,000.00",$30.00,$30.00,$0.00,
+65a8,2025-06-02 09:00:00 UTC,Retail Staking Transfer,ETH,0.1,USD,"$3,000.00",$300.00,$300.00,$0.00,
+65a9,2025-06-03 09:00:00 UTC,Learning Reward,GRT,10,USD,$0.15,$1.50,$1.50,$0.00,
+65b0,2025-06-04 09:00:00 UTC,Mystery Type,ETH,0.1,USD,"$3,000.00",$300.00,$300.00,$0.00,

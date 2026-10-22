@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>CryptoAnalyze</title>
+  <meta name="description" content="Suivi personnel de portefeuille crypto : imports Coinbase et Binance, prix de revient, plus-values, cours.">
+  <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0D0C15" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <script>window.__t0=Date.now();try{var t=localStorage.getItem('cryptoanalyze:theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t;}catch(e){}</script>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="CryptoAnalyze">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <style>
+    /* écran de démarrage : affiché dès le premier rendu, avant le CSS et le JS */
+    html{background:#FFFFFF}
+    html[data-theme="dark"]{background:#0D0C15}
+    body{margin:0}
+    .splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#FFFFFF;transition:opacity .35s ease}
+    html[data-theme="dark"] .splash{background:#0D0C15}
+    .splash.out{opacity:0;pointer-events:none}
+    .splash .mark{width:88px;height:88px;border-radius:24px;background:#5B3FD9;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(91,63,217,.3);animation:sp-pulse 1.5s ease-in-out infinite}
+    html[data-theme="dark"] .splash .mark{background:#6A50E6}
+    .splash svg *{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .splash rect{animation:sp-candle 1.5s ease-in-out infinite;transform-origin:center}
+    .splash rect+rect{animation-delay:.2s}
+    @keyframes sp-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+    @keyframes sp-candle{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)}}
+    @media (prefers-reduced-motion:reduce){.splash .mark,.splash rect{animation:none}}
+  </style>
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Open+Sans:wght@400;600;700&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Open+Sans:wght@400;600;700&display=swap"></noscript>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="splash" class="splash" role="status" aria-label="CryptoAnalyze"><div class="mark"><svg width="48" height="48" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v4"/><rect x="7" y="9" width="4" height="6" rx="1"/><path d="M9 15v2"/><path d="M17 3v2"/><rect x="15" y="5" width="4" height="8" rx="1"/><path d="M17 13v3"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/></svg></div></div>
+  <noscript>CryptoAnalyze a besoin de JavaScript.</noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+/* ==========================================================================
+   Design tokens – CryptoAnalyze
+   Palette propre à l'application (indigo nuit + or), structure de tokens
+   identique à celle de PEAnalyze : changer de charte = éditer ce seul fichier.
+   Polices : Montserrat 500/600/700 (titres, montants) + Open Sans 400/600/700.
+   ========================================================================== */
+
+:root {
+  /* ---------- Typographie ---------- */
+  --font-heading: Montserrat, system-ui, ui-sans-serif, sans-serif;
+  --font-body: "Open Sans", system-ui, ui-sans-serif, sans-serif;
+
+  --fs-11: 11px;  --lh-11: 16.5px;
+  --fs-12: 12px;  --lh-12: 18px;
+  --fs-14: 14px;  --lh-14: 21px;
+  --fs-16: 16px;  --lh-16: 24px;
+  --fs-18: 18px;  --lh-18: 27px;
+  --fs-24: 24px;  --lh-24: 36px;
+  --fs-28: 28px;  --lh-28: 42px;
+  --fs-34: 34px;  --lh-34: 48px;
+  --fs-40: 40px;  --lh-40: 56px;
+
+  --fw-400: 400; --fw-500: 500; --fw-600: 600; --fw-700: 700;
+
+  --type-display: var(--fw-700) var(--fs-34)/var(--lh-34) var(--font-heading);
+  --type-h1: var(--fw-700) var(--fs-28)/var(--lh-28) var(--font-heading);
+  --type-h2: var(--fw-700) var(--fs-24)/var(--lh-24) var(--font-heading);
+  --type-h3: var(--fw-700) var(--fs-18)/var(--lh-18) var(--font-heading);
+  --type-amount-l: var(--fw-700) var(--fs-18)/var(--lh-18) var(--font-heading);
+  --type-amount-m: var(--fw-700) var(--fs-16)/var(--lh-16) var(--font-heading);
+  --type-amount-s: var(--fw-700) var(--fs-14)/var(--lh-14) var(--font-heading);
+  --type-button: var(--fw-700) var(--fs-14)/var(--lh-14) var(--font-heading);
+  --type-overline: var(--fw-700) var(--fs-12)/var(--lh-12) var(--font-heading);
+  --type-chip: var(--fw-700) var(--fs-12)/var(--lh-12) var(--font-heading);
+  --type-body: var(--fw-400) var(--fs-14)/var(--lh-14) var(--font-body);
+  --type-body-strong: var(--fw-600) var(--fs-14)/var(--lh-14) var(--font-body);
+  --type-label: var(--fw-600) var(--fs-14)/var(--lh-14) var(--font-body);
+  --type-caption: var(--fw-400) var(--fs-12)/var(--lh-12) var(--font-body);
+  --type-caption-strong: var(--fw-600) var(--fs-12)/var(--lh-12) var(--font-body);
+  --type-legal: var(--fw-400) var(--fs-11)/var(--lh-11) var(--font-body);
+  --type-tab: var(--fw-600) var(--fs-11)/var(--lh-11) var(--font-body);
+  --type-badge: var(--fw-600) var(--fs-11)/var(--lh-11) var(--font-body);
+  --overline-tracking: 0.6px;
+
+  /* ---------- Couleurs de marque ---------- */
+  --brand-primary: #5B3FD9;          /* indigo */
+  --brand-primary-hover: #4A31BF;
+  --brand-primary-pressed: #3D27A3;
+  --brand-secondary: #7C66E6;
+  --brand-accent: #1B1640;           /* nuit : fond des cartes « hero » */
+  --brand-tertiary: #0E8C9C;
+  --brand-gold: #F2A93B;             /* or : accent du logotype et des gains en vedette */
+  --brand-light: #C9BFFF;
+  --primary-fg: var(--brand-primary);
+  --primary-fg-hover: var(--brand-primary-hover);
+
+  /* ---------- Fonds ---------- */
+  --bg-page: #FFFFFF;
+  --bg-surface: #FFFFFF;
+  --bg-surface-minimal: #F6F6FA;
+  --bg-brand-minimal: #F4F2FD;
+  --bg-brand-moderate: #E2DCFA;
+  --bg-brand-neutral: #EEEDF4;
+  --bg-blue-minimal: #E6F4F6;
+  --bg-grey-minimal: #ECECF2;
+  --bg-contrast: #17152B;
+  --bg-hover: #5B3FD914;
+  --bg-pressed: #5B3FD926;
+  --bg-highlight: #5B3FD91A;
+  --bg-overlay: #0D0B2080;
+  --bg-reverse-subtle: #FFFFFF26;
+  --bg-disabled: #ECECF2;
+
+  /* ---------- Textes ---------- */
+  --text: #17152B;
+  --text-strong: #0B0A18;
+  --text-neutral: #484763;
+  --text-moderate: #686784;
+  --text-primary: #5B3FD9;
+  --text-accent: #1B1640;
+  --text-blue: #0E6B78;
+  --text-reverse: #FFFFFF;
+  --text-reverse-muted: #D3CCF5;
+  --text-disabled: #686784;
+
+  /* ---------- Bordures & séparateurs ---------- */
+  --border: #686784;
+  --border-minimal: #DCDBE6;
+  --border-moderate: #B2B1C4;
+  --border-primary: #5B3FD9;
+  --divider: #B2B1C4;
+  --divider-minimal: #ECECF2;
+  --divider-reverse: #FFFFFF33;
+  --focus-indicator: #0E8C9C;
+
+  /* ---------- États fonctionnels ---------- */
+  --success: #15803D;  --success-text: #146C35; --success-bg: #E8F6EC;
+  --critical: #C9302C; --critical-text: #AE1A16; --critical-bg: #FDECEB;
+  --warning: #C25A06;  --warning-text: #A04A00; --warning-bg: #FEF0E3;
+  --info: #2563EB;     --info-text: #1D4FBF;    --info-bg: #EBF1FE;
+  --notification: #E62F44;
+
+  /* ---------- Palette graphiques ---------- */
+  --chart-1: #5B3FD9;
+  --chart-2: #F2A93B;
+  --chart-3: #14A3A0;
+  --chart-4: #E8467C;
+  --chart-5: #3B82F6;
+  --chart-6: #7CB518;
+  --chart-7: #A855F7;
+  --chart-8: #F97316;
+  --chart-other: #BDBCCC;
+  --chart-grid: #ECECF2;
+  --chart-axis: #686784;
+  --chart-deposited: #B2B1C4;
+  --chart-deposited-line: #686784;
+  --chart-value: #5B3FD9;
+  --chart-value-area: #5B3FD91A;
+  --chart-gain-area: #34C77B40;
+  --chart-loss-area: #E5484D33;
+  --chart-pru: #C25A06;
+
+  /* couleur fixe de chaque crypto (identique partout : pastille, donut, courbes) */
+  --coin-BTC: #F7931A;
+  --coin-ETH: #627EEA;
+  --coin-SOL: #9945FF;
+  --coin-USDC: #2775CA;
+  --coin-USDT: #26A17B;
+  --coin-BNB: #E0A800;
+  --coin-XRP: #4B5563;
+  --coin-ADA: #1D4ED8;
+  --coin-DOGE: #C2A633;
+  --coin-AVAX: #E84142;
+  --coin-DOT: #E6007A;
+  --coin-LINK: #2A5ADA;
+  --coin-POL: #8247E5;
+  --coin-MATIC: #8247E5;
+  --coin-LTC: #345D9D;
+  --coin-TRX: #EB0029;
+  --coin-SHIB: #F59E0B;
+  --coin-ATOM: #6F7390;
+  --coin-XLM: #5C6B82;
+  --coin-NEAR: #00A57A;
+  --coin-UNI: #FF007A;
+  --coin-ARB: #28A0F0;
+  --coin-OP: #FF0420;
+  --coin-SUI: #4DA2FF;
+  --coin-TON: #0098EA;
+  --coin-PEPE: #3D9F3A;
+  --coin-DAI: #F5AC37;
+  --coin-BCH: #0AC18E;
+  --coin-ETC: #328332;
+  --coin-HBAR: #5B5B6B;
+  --coin-APT: #00B39F;
+  --coin-FDUSD: #00A57A;
+
+  /* ---------- Rayons ---------- */
+  --radius-2: 2px; --radius-4: 4px; --radius-6: 6px; --radius-8: 8px;
+  --radius-12: 12px; --radius-16: 16px; --radius-20: 20px;
+  --radius-24: 24px; --radius-32: 32px; --radius-40: 40px;
+  --radius-full: 999px;
+
+  /* ---------- Ombres ---------- */
+  --shadow-xs: 0 1px 3px 0 #1B164026;
+  --shadow-s: 0 4px 16px 0 #1B16401A;
+  --shadow-m: 0 10px 60px 0 #1B164026;
+  --shadow-l: 0 20px 80px 0 #1B16404D;
+  --shadow-sticky: 0 -2px 12px 0 #1B16401A;
+  --shadow-fab: 0 6px 20px 0 #5B3FD959;
+
+  /* ---------- Espacements (grille 4px) ---------- */
+  --space-2: 2px; --space-4: 4px; --space-6: 6px; --space-8: 8px; --space-10: 10px; --space-12: 12px;
+  --space-16: 16px; --space-20: 20px; --space-24: 24px; --space-32: 32px;
+  --space-40: 40px; --space-48: 48px; --space-64: 64px;
+
+  /* ---------- Mise en page mobile ---------- */
+  --screen-width: 390px;
+  --screen-height: 844px;
+  --screen-margin: 16px;
+  --safe-top: 47px;
+  --safe-bottom: 34px;
+  --header-height: 64px;
+  --tabbar-height: 64px;
+  --touch-min: 44px;
+  --fab-size: 56px;
+
+  /* ---------- Composants ---------- */
+  --button-height: 40px;
+  --button-padding: 8px 24px;
+  --button-radius: 999px;
+  --chip-height: 36px;
+  --chip-padding: 8px 16px;
+  --tab-indicator-height: 3px;
+  --input-height: 48px;
+  --input-radius: 4px;
+  --input-border: 1px solid #686784;
+  --input-border-focus: 2px solid #0E8C9C;
+  --input-border-error: 2px solid #C9302C;
+  --toast-bg: #15803D;
+  --tooltip-bg: #1B1640;
+  --sparkline-height: 40px;
+  --donut-ring: 24px;
+  --allocation-bar-height: 8px;
+}
+
+/* ==========================================================================
+   Thème sombre : mêmes rôles, valeurs adaptées (contraste ≥ 4,5:1).
+   ========================================================================== */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --brand-primary: #6A50E6;
+  --brand-primary-hover: #7C64EE;
+  --brand-primary-pressed: #5840D0;
+  --brand-secondary: #8E7BF0;
+  --brand-accent: #241D52;
+  --brand-tertiary: #22B3C4;
+  --brand-gold: #F5B85A;
+  --brand-light: #C9BFFF;
+  --primary-fg: #AFA2FF;
+  --primary-fg-hover: #C6BDFF;
+
+  --bg-page: #0D0C15;
+  --bg-surface: #17161F;
+  --bg-surface-minimal: #1E1D29;
+  --bg-brand-minimal: #1D1935;
+  --bg-brand-moderate: #2B2552;
+  --bg-brand-neutral: #201E2C;
+  --bg-blue-minimal: #102E33;
+  --bg-grey-minimal: #282737;
+  --bg-contrast: #E8E6F2;
+  --bg-hover: #AFA2FF1F;
+  --bg-pressed: #AFA2FF33;
+  --bg-highlight: #AFA2FF1F;
+  --bg-overlay: #000000A6;
+  --bg-reverse-subtle: #FFFFFF1F;
+  --bg-disabled: #282737;
+
+  --text: #E8E6F2;
+  --text-strong: #FFFFFF;
+  --text-neutral: #B9B7CC;
+  --text-moderate: #9593AD;
+  --text-primary: #AFA2FF;
+  --text-accent: #C9BFFF;
+  --text-blue: #6CCAD6;
+  --text-reverse: #FFFFFF;
+  --text-reverse-muted: #CBC3F2;
+  --text-disabled: #6E6C85;
+
+  --border: #9593AD;
+  --border-minimal: #2E2D3D;
+  --border-moderate: #4A4960;
+  --border-primary: #AFA2FF;
+  --divider: #4A4960;
+  --divider-minimal: #272635;
+  --divider-reverse: #FFFFFF2E;
+  --focus-indicator: #3CC4D8;
+
+  --success: #1F9D50;  --success-text: #63D08D; --success-bg: #12301F;
+  --critical: #C93A33; --critical-text: #FF8F86; --critical-bg: #3A1B1B;
+  --warning: #B8580F;  --warning-text: #F5A766; --warning-bg: #3A2516;
+  --info: #3B82F6;     --info-text: #8DB5FF;    --info-bg: #15213D;
+  --notification: #F0475A;
+
+  --chart-1: #8B74FF;
+  --chart-2: #F5B85A;
+  --chart-3: #2CC3BF;
+  --chart-4: #F06A97;
+  --chart-5: #60A5FA;
+  --chart-6: #9AD134;
+  --chart-7: #C084FC;
+  --chart-8: #FB923C;
+  --chart-other: #5D5C70;
+  --chart-grid: #272635;
+  --chart-axis: #9593AD;
+  --chart-deposited: #6E6C85;
+  --chart-deposited-line: #A9A7BE;
+  --chart-value: #8B74FF;
+  --chart-value-area: #8B74FF2E;
+  --chart-gain-area: #34C77B33;
+  --chart-loss-area: #FF8F8626;
+  --chart-pru: #F08A3C;
+
+  --coin-XRP: #9CA3AF;
+  --coin-ADA: #5B8DEF;
+  --coin-LTC: #7FA3D9;
+  --coin-ATOM: #A3A6C2;
+  --coin-XLM: #9AA7BD;
+  --coin-HBAR: #A1A1B5;
+  --coin-ETC: #4CAF50;
+
+  --shadow-xs: 0 1px 3px 0 #00000066;
+  --shadow-s: 0 4px 16px 0 #00000059;
+  --shadow-m: 0 10px 60px 0 #00000080;
+  --shadow-l: 0 20px 80px 0 #00000099;
+  --shadow-sticky: 0 -2px 12px 0 #00000066;
+  --shadow-fab: 0 6px 20px 0 #00000080;
+
+  --input-border: 1px solid #9593AD;
+  --input-border-focus: 2px solid #3CC4D8;
+  --input-border-error: 2px solid #FF8F86;
+  --toast-bg: #17803F;
+  --tooltip-bg: #2B2552;
+}
