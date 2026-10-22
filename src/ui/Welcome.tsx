@@ -15,6 +15,7 @@ export function WelcomeCard({ className = '' }: { className?: string }) {
       <ol className="stack-8 t-caption c-neutral" style={{ paddingLeft: 'var(--space-20)', margin: 0 }}>
         <li><strong style={{ color: 'var(--text)' }}>Coinbase</strong> : Profil › Rapports › Générer un rapport › Historique des transactions (CSV).</li>
         <li><strong style={{ color: 'var(--text)' }}>Binance</strong> : Portefeuille › Historique des transactions › Générer tous les relevés (CSV ou ZIP).</li>
+        <li><strong style={{ color: 'var(--text)' }}>Ledger</strong> : Ledger Live › Paramètres › Comptes › Exporter l’historique des opérations.</li>
         <li>Déposez les fichiers dans CryptoAnalyze : les doublons sont ignorés, vous pouvez réimporter à tout moment.</li>
       </ol>
       <button type="button" className="btn btn-primary block" onClick={() => navigate('/historique/import')}><Icon name="upload" size={20} />Importer mes fichiers</button>

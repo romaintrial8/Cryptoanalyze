@@ -5,6 +5,7 @@
 //  - Binance   : « Historique des transactions » (Wallet › Transaction History › Generate all statements)
 //  - Binance   : « Historique des trades » spot (Orders › Spot Order › Trade History › Export)
 //  - Kraken    : « Ledgers » (bonus)
+//  - Ledger Live : historique des opérations (portefeuille matériel)
 //  - CSV générique CryptoAnalyze (celui que l'app exporte) : pour toute autre plateforme ou un portefeuille
 import type { IncomeType, Leg, Tx, TxKind } from './types';
 import { isFiat, normSymbol } from './assets';
@@ -448,6 +449,40 @@ function parseKraken(rows: string[][], hi: number): ParseResult {
   return res;
 }
 
+// ------------------------------------------------------------------ Ledger Live : historique des opérations
+// Ledger Live › Paramètres › Comptes › Exporter l'historique des opérations (CSV).
+function parseLedger(rows: string[][], hi: number): ParseResult {
+  const g = indexer(rows[hi]);
+  const res: ParseResult = { format: 'Ledger Live – historique des opérations', platform: 'Ledger', txs: [], rows: 0, ignored: 0, unknown: {}, warnings: [] };
+  for (const row of rows.slice(hi + 1)) {
+    const date = parseDate(g(row, 'Operation Date', 'Date'));
+    const asset = normSymbol(g(row, 'Currency Ticker', 'Currency') || '');
+    const type = (g(row, 'Operation Type', 'Type') || '').trim().toUpperCase();
+    const amount = Math.abs(parseAmount(g(row, 'Operation Amount', 'Amount')));
+    const fee = Math.abs(parseAmount(g(row, 'Operation Fees', 'Fees'))) || 0;
+    const status = (g(row, 'Status') || '').toLowerCase();
+    if (!date || !asset || !type) continue;
+    res.rows++;
+    if (status && !/confirm/.test(status)) { res.ignored++; continue; }
+    const cvT = (g(row, 'Countervalue Ticker') || '').toUpperCase();
+    const cv = Math.abs(parseAmount(g(row, 'Countervalue at Operation Date')));
+    const usd = cvT === 'USD' && isFinite(cv) && cv > 0 ? cv : undefined;
+    const base = { date, platform: 'Ledger', src: 'ledger', note: g(row, 'Account Name') || undefined } as const;
+    const feeLeg = fee > 0 ? leg(asset, fee) : undefined;
+    if (type === 'IN') res.txs.push({ ...base, kind: 'transfer_in', inLeg: leg(asset, amount), usd });
+    else if (type === 'OUT') {
+      // le montant de Ledger Live inclut les frais de réseau : on les sépare
+      const sent = feeLeg && amount > fee ? amount - fee : amount;
+      res.txs.push({ ...base, kind: 'transfer_out', outLeg: leg(asset, sent), fee: feeLeg && amount > fee ? feeLeg : undefined });
+    } else if (/REWARD|STAKING_REWARD|INTEREST/.test(type)) res.txs.push({ ...base, kind: 'income', incomeType: 'staking', inLeg: leg(asset, amount), usd });
+    else if (/^(FEES|DELEGATE|UNDELEGATE|REDELEGATE|OPT_IN|OPT_OUT|VOTE|FREEZE|UNFREEZE|BOND|UNBOND|NOMINATE|CHILL|WITHDRAW_UNBONDED|STAKE|UNSTAKE|APPROVE|ACTIVATE)$/.test(type)) {
+      if (feeLeg) res.txs.push({ ...base, kind: 'fee', fee: feeLeg, note: 'Frais : ' + type }); else res.ignored++;
+    } else if (/NFT/.test(type)) res.ignored++;
+    else res.unknown[type] = (res.unknown[type] || 0) + 1;
+  }
+  return res;
+}
+
 // ------------------------------------------------------------------ CSV générique CryptoAnalyze
 export const GENERIC_HEADER = ['date', 'type', 'received_asset', 'received_qty', 'sent_asset', 'sent_qty', 'fee_asset', 'fee_qty', 'usd_value', 'fee_usd', 'platform', 'income_type', 'note'];
 const KINDS: TxKind[] = ['trade', 'income', 'transfer_in', 'transfer_out', 'cash_in', 'cash_out', 'fee'];
@@ -490,6 +525,7 @@ export function parseRows(rows: string[][]): ParseResult | null {
   if ((hi = findHeader(rows, ['UTC_Time', 'Operation', 'Coin', 'Change'])) >= 0 || (hi = findHeader(rows, ['Durée', 'Opération', 'Jeton', 'Change'])) >= 0) return finish(parseBinanceLedger(rows, hi));
   if ((hi = findHeader(rows, ['Date(UTC)', 'Pair', 'Side'])) >= 0 || (hi = findHeader(rows, ['Date(UTC)', 'Market', 'Type'])) >= 0) return finish(parseBinanceTrades(rows, hi));
   if ((hi = findHeader(rows, ['txid', 'refid', 'time', 'type', 'asset', 'amount'])) >= 0) return finish(parseKraken(rows, hi));
+  if ((hi = findHeader(rows, ['Operation Date', 'Currency Ticker', 'Operation Type', 'Operation Amount'])) >= 0) return finish(parseLedger(rows, hi));
   if ((hi = findHeader(rows, ['date', 'type', 'received_asset'])) >= 0) return finish(parseGeneric(rows, hi));
   return null;
 }

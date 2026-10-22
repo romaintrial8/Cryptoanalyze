@@ -80,3 +80,29 @@ test('Binance FR (Excel) : carte, Auto-Invest décalé, intérêts Earn, carte c
   close(led.assets.get('USDT')!.qty, 0);
   assert.equal(led.warnings.length, 0);
 });
+
+test('Ledger Live : réceptions rapprochées des retraits Binance, récompense, frais', () => {
+  const ledger = [
+    'Operation Date,Status,Currency Ticker,Operation Type,Operation Amount,Operation Fees,Operation Hash,Account Name,Account xpub,Countervalue Ticker,Countervalue at Operation Date,Countervalue at CSV Export',
+    '2026-06-20T21:15:02.000Z,Confirmed,BTC,IN,0.01398,0,abc,Bitcoin 1,xpub,USD,980.5,1500',
+    '2026-07-01T10:00:00.000Z,Confirmed,ATOM,REWARD,0.05,0,def,Cosmos 1,xpub,USD,0.4,0.3',
+    '2026-07-02T10:00:00.000Z,Confirmed,ATOM,DELEGATE,0,0.002,ghi,Cosmos 1,xpub,USD,0,0',
+    '2026-09-03T19:50:00.000Z,Confirmed,EGLD,OUT,30.7482,0.0002,jkl,MultiversX 1,xpub,USD,145,150',
+    '2026-09-04T10:00:00.000Z,Failed,BTC,OUT,1,0,mno,Bitcoin 1,xpub,USD,0,0',
+  ].join('\n');
+  const r = parseText(ledger)!;
+  assert.equal(r.platform, 'Ledger');
+  assert.deepEqual(r.unknown, {});
+  assert.equal(r.ignored, 1); // opération échouée
+  assert.deepEqual(r.txs.map((t) => t.kind), ['transfer_in', 'income', 'fee', 'transfer_out']);
+  close(r.txs[3].outLeg!.qty, 30.748);
+  // retrait Binance de 0,014 BTC frais inclus → 0,01398 reçus sur Ledger : rapprochés, le coût suit
+  const binance: Omit<Tx, 'id'>[] = [
+    { date: '2026-06-01T10:00:00Z', kind: 'trade', outLeg: { asset: 'USDT', qty: 1400 }, inLeg: { asset: 'BTC', qty: 0.014 }, platform: 'Binance' },
+    { date: '2026-06-20T21:10:44Z', kind: 'transfer_out', outLeg: { asset: 'BTC', qty: 0.014 }, platform: 'Binance' },
+  ];
+  const led = runLedger(ids([...binance, ...r.txs]), {});
+  close(led.assets.get('BTC')!.qty, 0.01398);
+  close(led.assets.get('BTC')!.platforms.Ledger, 0.01398);
+  close(led.unmatchedOut, 0);
+});

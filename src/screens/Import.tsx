@@ -50,7 +50,7 @@ export function ImportScreen() {
           onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) void onFiles(e.dataTransfer.files); }}>
           <span className="empty-icon" style={{ width: 64, height: 64 }}><Icon name="fileUp" size={30} /></span>
           <span className="t-amount-m">{busy ? 'Lecture…' : 'Choisir des fichiers'}</span>
-          <span className="t-caption c-neutral">CSV, Excel (.xlsx) ou ZIP · plusieurs fichiers à la fois · Coinbase, Binance, Kraken, CSV CryptoAnalyze</span>
+          <span className="t-caption c-neutral">CSV, Excel (.xlsx) ou ZIP · plusieurs fichiers à la fois · Coinbase, Binance, Ledger Live, Kraken, CSV CryptoAnalyze</span>
           <input ref={input} type="file" multiple accept=".csv,.xlsx,.zip,.txt,text/csv" className="sr-only" onChange={(e) => { if (e.target.files?.length) void onFiles(e.target.files); e.target.value = ''; }} />
         </label>
 
@@ -121,6 +121,17 @@ export function ImportScreen() {
               <p><strong>Recommandé – relevé complet :</strong> Portefeuille › Vue d’ensemble › <strong>Historique des transactions</strong> › Exporter › « Générer tous les relevés » (par tranches de 12 mois). Déposez les CSV ou le ZIP tels quels : achats, conversions, dépôts, retraits, Earn et airdrops sont reconnus.</p>
               <p><strong>Alternative :</strong> Ordres › Ordre spot › Historique des trades › Exporter (Excel). Il ne contient que les trades : ajoutez dépôts et revenus avec le relevé.</p>
               <p>Ne combinez pas les deux exports pour la même période : les trades seraient comptés deux fois.</p>
+            </div>
+          </details>
+          <details className="faq">
+            <summary>Ledger (portefeuille matériel)<Icon name="down" size={20} /></summary>
+            <div className="faq-a">
+              <ol style={{ paddingLeft: 'var(--space-20)', margin: 0 }} className="stack-4">
+                <li>Ouvrez <strong>Ledger Live</strong> sur ordinateur (pas besoin de brancher le Ledger).</li>
+                <li><strong>Paramètres</strong> (roue dentée) › onglet <strong>Comptes</strong> › « Historique des opérations » › <strong>Exporter</strong> › sélectionnez tous les comptes › enregistrez le CSV.</li>
+                <li>Déposez-le ici : chaque retrait Binance ou Coinbase vers le Ledger est rapproché de sa réception, le prix de revient suit vos jetons.</li>
+              </ol>
+              <p>Le fichier ne contient que l’historique public de vos adresses : aucune clé, aucune phrase de récupération.</p>
             </div>
           </details>
           <details className="faq">
