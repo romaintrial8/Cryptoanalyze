@@ -67,7 +67,8 @@ export const BUILTIN_COINS: CoinInfo[] = [
 
 /** Synonymes utilisés par certaines plateformes. */
 export const SYMBOL_ALIASES: Record<string, string> = {
-  XBT: 'BTC', XXBT: 'BTC', XETH: 'ETH', XXRP: 'XRP', XXDG: 'DOGE', XDG: 'DOGE', ZUSD: 'USD', ZEUR: 'EUR', ETH2: 'ETH', 'ETH2.S': 'ETH', CGLD: 'CELO', RNDR: 'RENDER', MATIC: 'MATIC',
+  XBT: 'BTC', XXBT: 'BTC', BTCB: 'BTC', // BTC retiré via BNB Chain (Binance-Peg BTC) : même actif économique
+  XETH: 'ETH', XXRP: 'XRP', XXDG: 'DOGE', XDG: 'DOGE', ZUSD: 'USD', ZEUR: 'EUR', ETH2: 'ETH', 'ETH2.S': 'ETH', CGLD: 'CELO', RNDR: 'RENDER', MATIC: 'MATIC',
 };
 
 export function normSymbol(s: string): string {

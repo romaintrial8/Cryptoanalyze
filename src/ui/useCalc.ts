@@ -24,7 +24,8 @@ export function useCalc(): Calc {
     const positions = computePositions(led, (a) => quoteOf(a, data));
     const summary = computeSummary(led, positions, data.txs.length, todayIso(), data.settings.smallThreshold);
     const held = positions.filter((p) => p.qty > 0);
-    const visible = data.settings.hideSmall ? held.filter((p) => p.price === null || p.value >= data.settings.smallThreshold) : held;
+    // sans cours connu, on juge sur le coût : un jeton reçu gratuitement et sans cours (souvent un spam d'airdrop) est masqué
+    const visible = data.settings.hideSmall ? held.filter((p) => (p.price === null ? p.cost >= data.settings.smallThreshold : p.value >= data.settings.smallThreshold)) : held;
     return { data, led, positions, held, visible, summary, pos: (a: string) => positions.find((p) => p.asset === a) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, ps.quotes]);

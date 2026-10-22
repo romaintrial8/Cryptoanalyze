@@ -69,7 +69,7 @@ export function pairTransfers(txs: Tx[]): Map<string, string> {
       const dt = (ti - Date.parse(o.date)) / 36e5; // heures, positif si la réception suit l'envoi
       if (dt < -2 || dt > 24 * 7) continue;
       const sent = o.outLeg!.qty, got = i.inLeg!.qty;
-      if (got > sent * 1.0001 + 1e-12 || got < sent * 0.9) continue;
+      if (got > sent * 1.0001 + 1e-12 || got < sent * 0.7) continue; // frais de retrait des plateformes : parfois 20 % sur les petits montants de jetons
       const score = Math.abs(dt) + (1 - got / sent) * 100 + (o.platform === i.platform ? 50 : 0);
       if (score < bestScore) { bestScore = score; best = o; }
     }
@@ -128,13 +128,11 @@ export function runLedger(txsIn: Tx[], fx: FxTable, onDay?: (s: DaySnapshot) => 
   const outOf = new Map<string, Tx>();
   for (const t of txsIn) outOf.set(t.id, t);
   const pairedOut = new Set(pairs.values());
-  // une réception rapprochée est traitée juste après son envoi (si elle a été horodatée un peu avant)
-  const txs = sortTxs(txsIn.map((t) => {
-    const oid = pairs.get(t.id);
-    if (!oid) return t;
-    const o = outOf.get(oid)!;
-    return t.date < o.date ? { ...t, date: o.date } : t;
-  }));
+  // réception horodatée avant son envoi (la plateforme enregistre le retrait après l'arrivée sur la blockchain) :
+  // on avance l'envoi à l'heure de la réception, pour que les jetons soient là avant d'être dépensés
+  const outAt = new Map<string, string>();
+  for (const [iid, oid] of pairs) { const i = outOf.get(iid)!, o = outOf.get(oid)!; if (i.date < o.date) outAt.set(oid, i.date); }
+  const txs = sortTxs(txsIn.map((t) => (outAt.has(t.id) ? { ...t, date: outAt.get(t.id)! } : t)));
   const assets = new Map<string, AssetState>();
   const info = new Map<string, TxInfo>();
   const inTransit = new Map<string, number>(); // id envoi → coût en transit

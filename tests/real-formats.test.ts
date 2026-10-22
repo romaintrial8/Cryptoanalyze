@@ -106,3 +106,12 @@ test('Ledger Live : réceptions rapprochées des retraits Binance, récompense, 
   close(led.assets.get('BTC')!.platforms.Ledger, 0.01398);
   close(led.unmatchedOut, 0);
 });
+
+test('Binance : fuseau horaire lu dans le nom du fichier (UTC+2)', async () => {
+  const { binanceOffset } = await import('../src/domain/importers');
+  assert.equal(binanceOffset('Binance-Historique-des-transactions-202610222158UTC2_5cfcb53c.xlsx'), 2);
+  assert.equal(binanceOffset('export-UTC-5.csv'), -5);
+  assert.equal(binanceOffset('binance.csv'), 0);
+  const r = parseRows([H, row('2026-06-20 21:10:44', 'Withdraw', 'BTC', '-0.014')], 'Binance-x-202610222158UTC2_a.xlsx')!;
+  assert.equal(r.txs[0].date, '2026-06-20T19:10:44Z');
+});

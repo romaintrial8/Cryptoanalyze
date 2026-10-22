@@ -224,7 +224,13 @@ const BN_INCOME: [RegExp, IncomeType][] = [
   [/interest|savings|earn/, 'interest'], [/reward|commission|referral|kickback|cashback|voucher|crypto box|mission|bonus|rebate|gift|vega/, 'reward'],
 ];
 
-function parseBinanceLedger(rows: string[][], hi: number): ParseResult {
+/** Décalage horaire indiqué dans le nom d'un export Binance (« …202610222158UTC2_… » = heure UTC+2), en heures. */
+export function binanceOffset(fileName = ''): number {
+  const m = /UTC([+-]?\d{1,2})(?:[_.\-\s]|$)/i.exec(fileName);
+  return m ? Number(m[1]) : 0;
+}
+
+function parseBinanceLedger(rows: string[][], hi: number, offsetH = 0): ParseResult {
   const g = indexer(rows[hi]);
   const res: ParseResult = { format: 'Binance – historique des transactions', platform: 'Binance', txs: [], rows: 0, ignored: 0, unknown: {}, warnings: [] };
   type Row = { date: string; t: number; op: string; opRaw: string; coin: string; change: number };
@@ -232,7 +238,9 @@ function parseBinanceLedger(rows: string[][], hi: number): ParseResult {
   const earnRows: Row[] = [];
   const base = (date: string) => ({ date, platform: 'Binance', src: 'binance' } as const);
   for (const row of rows.slice(hi + 1)) {
-    const date = parseDate(g(row, 'UTC_Time', 'Time', 'Date(UTC)', 'Durée', 'Date'));
+    let date = parseDate(g(row, 'UTC_Time', 'Time', 'Date(UTC)', 'Durée', 'Date'));
+    // le relevé est dans le fuseau choisi par l'utilisateur (colonne « Durée » / nom du fichier) : on revient en UTC
+    if (date && offsetH && !g(row, 'UTC_Time')) date = new Date(Date.parse(date) - offsetH * 3600e3).toISOString().replace(/\.\d{3}Z$/, 'Z');
     const opRaw = (g(row, 'Operation', 'Opération') || '').trim();
     const coin = normSymbol(g(row, 'Coin', 'Jeton', 'Asset') || '');
     const change = parseAmount(g(row, 'Change', 'Variation', 'Montant'));
@@ -519,10 +527,10 @@ function parseGeneric(rows: string[][], hi: number): ParseResult {
 }
 
 // ------------------------------------------------------------------ détection
-export function parseRows(rows: string[][]): ParseResult | null {
+export function parseRows(rows: string[][], fileName = ''): ParseResult | null {
   let hi: number;
   if ((hi = findHeader(rows, ['Timestamp', 'Transaction Type', 'Asset', 'Quantity Transacted'])) >= 0) return finish(parseCoinbase(rows, hi));
-  if ((hi = findHeader(rows, ['UTC_Time', 'Operation', 'Coin', 'Change'])) >= 0 || (hi = findHeader(rows, ['Durée', 'Opération', 'Jeton', 'Change'])) >= 0) return finish(parseBinanceLedger(rows, hi));
+  if ((hi = findHeader(rows, ['UTC_Time', 'Operation', 'Coin', 'Change'])) >= 0 || (hi = findHeader(rows, ['Durée', 'Opération', 'Jeton', 'Change'])) >= 0) return finish(parseBinanceLedger(rows, hi, binanceOffset(fileName)));
   if ((hi = findHeader(rows, ['Date(UTC)', 'Pair', 'Side'])) >= 0 || (hi = findHeader(rows, ['Date(UTC)', 'Market', 'Type'])) >= 0) return finish(parseBinanceTrades(rows, hi));
   if ((hi = findHeader(rows, ['txid', 'refid', 'time', 'type', 'asset', 'amount'])) >= 0) return finish(parseKraken(rows, hi));
   if ((hi = findHeader(rows, ['Operation Date', 'Currency Ticker', 'Operation Type', 'Operation Amount'])) >= 0) return finish(parseLedger(rows, hi));
@@ -538,6 +546,6 @@ function finish(r: ParseResult): ParseResult {
 }
 
 /** Entrée principale pour un fichier texte. */
-export function parseText(text: string): ParseResult | null {
-  return parseRows(parseCsv(text));
+export function parseText(text: string, fileName = ''): ParseResult | null {
+  return parseRows(parseCsv(text), fileName);
 }

@@ -61,7 +61,7 @@ async function fromBuffer(name: string, buf: ArrayBuffer | Uint8Array): Promise<
   const lower = name.toLowerCase();
   if (lower.endsWith('.xlsx')) {
     const sheets = await readXlsx(buf);
-    return sheets.map(parseRows).filter(Boolean) as ParseResult[];
+    return sheets.map((rows) => parseRows(rows, name)).filter(Boolean) as ParseResult[];
   }
   if (lower.endsWith('.zip')) {
     const JSZip = (await import('jszip')).default;
@@ -74,7 +74,7 @@ async function fromBuffer(name: string, buf: ArrayBuffer | Uint8Array): Promise<
     return res;
   }
   const text = new TextDecoder('utf-8').decode(buf);
-  const r = parseText(text);
+  const r = parseText(text, name);
   return r ? [r] : [];
 }
 
