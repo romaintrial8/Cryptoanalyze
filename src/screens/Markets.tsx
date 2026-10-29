@@ -6,7 +6,7 @@ import { CheckFilled, Icon } from '../ui/icons';
 import { navigate } from '../ui/router';
 import { useCalc } from '../ui/useCalc';
 import { CoinAvatar, coinColor } from '../ui/coins';
-import { coinIdOf, coinName, fullQuote, historyOf, loadHistories, quoteOf, searchCoins, usePrices } from '../data/prices';
+import { coinIdOf, coinName, fullQuote, historyOf, intradayLoading, intradayOf, loadHistories, loadIntraday, quoteOf, searchCoins, useIntradayVersion, usePrices } from '../data/prices';
 import { update } from '../data/store';
 import { txCategory } from '../domain/calc';
 import { isFiat } from '../domain/assets';
@@ -114,24 +114,48 @@ export function CatalogScreen() {
   );
 }
 
+type Period = '1H' | '3H' | '24H' | '7J' | '1M' | '3M' | '1A';
+const PERIODS: Period[] = ['1H', '3H', '24H', '7J', '1M', '3M', '1A'];
+
 export function CoinDetailScreen({ symbol }: { symbol: string }) {
   const { data, pos } = useCalc();
   const ps = usePrices();
-  const [period, setPeriod] = useState<'7J' | '1M' | '3M' | '1A'>('3M');
+  const [period, setPeriod] = useState<Period>('3M');
   const [log, setLog] = useState(false);
+  const iv = useIntradayVersion();
+  const fine = period === '1H' || period === '3H' || period === '24H' ? 1 : period === '7J' ? 7 : 0;
   useEffect(() => { void loadHistories(symbol); }, [symbol]);
+  useEffect(() => {
+    if (!fine) return;
+    void loadIntraday(symbol, fine as 1 | 7);
+    // courtes périodes : mise à jour chaque minute tant que l'écran est affiché
+    const t = setInterval(() => { if (document.visibilityState === 'visible') void loadIntraday(symbol, fine as 1 | 7); }, fine === 1 ? 60e3 : 600e3);
+    return () => clearInterval(t);
+  }, [symbol, fine]);
   const p = pos(symbol);
   const q = quoteOf(symbol);
   const fq = fullQuote(symbol);
-  const hist = useMemo(() => {
+  const hist = useMemo((): [string, number][] => {
+    if (fine) {
+      const pts = intradayOf(symbol, fine as 1 | 7) || [];
+      // le dernier point suit le cours en direct
+      return q && pts.length ? [...pts, [new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), q.usd]] : pts;
+    }
     const h = historyOf(symbol) || [];
-    // le dernier point suit le cours en direct
     if (q && h.length) return [...h.slice(0, -1), [h[h.length - 1][0], q.usd] as [string, number]];
     return h;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, ps.histVersion, q?.usd]);
-  const days = { '7J': 8, '1M': 31, '3M': 92, '1A': 366 }[period];
-  const start = Math.max(0, hist.length - days);
+  }, [symbol, ps.histVersion, q?.usd, fine, iv]);
+  const start = useMemo(() => {
+    if (fine) {
+      const hours = { '1H': 1, '3H': 3, '24H': 24, '7J': 24 * 7 }[period as '1H'] ?? 24;
+      const from = new Date(Date.now() - hours * 3600e3).toISOString();
+      const i = hist.findIndex((x) => x[0] >= from);
+      return i < 0 ? 0 : i;
+    }
+    return Math.max(0, hist.length - { '1M': 31, '3M': 92, '1A': 366 }[period as '1M']);
+  }, [hist, period, fine]);
+  const periodVar = hist.length > 1 && start < hist.length - 1 ? hist[hist.length - 1][1] / hist[start][1] - 1 : null;
   const txs = data.txs.filter((t) => t.inLeg?.asset === symbol || t.outLeg?.asset === symbol).sort((a, b) => (a.date < b.date ? 1 : -1));
   const markers: Marker[] = txs.filter((t) => t.kind === 'trade').map((t) => {
     const buy = t.inLeg?.asset === symbol;
@@ -139,7 +163,7 @@ export function CoinDetailScreen({ symbol }: { symbol: string }) {
     const v = t.usd ?? (t.outLeg && (t.outLeg.asset === 'USD' || /^USD[CT]$/.test(t.outLeg.asset)) ? t.outLeg.qty : t.inLeg && (t.inLeg.asset === 'USD' || /^USD[CT]$/.test(t.inLeg.asset)) ? t.inLeg.qty : undefined);
     return { date: t.date, side: buy ? 'buy' : 'sell', qty: leg.qty, price: v !== undefined ? v / leg.qty : undefined };
   });
-  const loading = !hist.length && (ps.histLoading > 0 || ps.loading);
+  const loading = !hist.length && (fine ? intradayLoading(symbol, fine as 1 | 7) : ps.histLoading > 0 || ps.loading);
   const id = coinIdOf(symbol);
   const watching = data.watch.includes(symbol);
   return (
@@ -156,6 +180,7 @@ export function CoinDetailScreen({ symbol }: { symbol: string }) {
             <span className="stack grow">
               <span className="t-h2">{price(q?.usd)}</span>
               <span className="row wrap t-caption c-neutral" style={{ gap: 'var(--space-8)' }}>
+                {period !== '24H' && periodVar !== null ? <VarChip ratio={periodVar} suffix={' ' + period.toLowerCase()} /> : null}
                 <VarChip ratio={q?.change24h ?? null} suffix=" 24 h" />
                 {fq?.ch7d !== undefined && fq.ch7d !== null && <VarChip ratio={fq.ch7d} suffix=" 7 j" />}
                 {fq?.rank ? <span>n° {fq.rank} par capitalisation</span> : null}
@@ -163,12 +188,12 @@ export function CoinDetailScreen({ symbol }: { symbol: string }) {
             </span>
           </div>
           <div className="between wrap" style={{ gap: 'var(--space-8)' }}>
-            <ChipGroup label="Période" value={period} onChange={setPeriod} options={[['7J', '7J'], ['1M', '1M'], ['3M', '3M'], ['1A', '1A']]} />
+            <ChipGroup className="chips g6" label="Période" value={period} onChange={setPeriod} options={PERIODS.map((x) => [x, x] as [Period, string])} />
             <label className="row t-caption c-neutral" style={{ gap: 'var(--space-8)' }}><span id="log-l">Échelle log</span><Switch checked={log} onChange={setLog} labelledBy="log-l" /></label>
           </div>
           {loading ? <div className="skel" style={{ height: 216, borderRadius: 'var(--radius-8)' }} aria-label="Chargement de l’historique" />
             : <PriceChart history={hist} start={start} markers={markers} pru={p && p.qty > 0 ? p.pru : undefined} color={coinColor(symbol)} log={log}
-              label={`Cours de ${symbol} sur ${period}`} emptyText={id ? 'Historique indisponible pour le moment (limite d’appels CoinGecko ?) : réessayez dans une minute.' : 'Crypto inconnue de CoinGecko : associez-la dans Paramètres.'} />}
+              label={`Cours de ${symbol} sur ${period}${periodVar !== null ? ' : ' + pctSigned(periodVar) : ''}`} emptyText={id ? 'Historique indisponible pour le moment (limite d’appels CoinGecko ?) : réessayez dans une minute.' : 'Crypto inconnue de CoinGecko : associez-la dans Paramètres.'} />}
           <div className="legend">
             <span><span className="dot s10" style={{ background: 'var(--bg-surface)', border: '2px solid var(--success)' }} />Achats</span>
             <span><span className="dot s10" style={{ background: 'var(--bg-surface)', border: '2px solid var(--critical)' }} />Ventes</span>

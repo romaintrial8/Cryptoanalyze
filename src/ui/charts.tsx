@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from 'react';
 import { useWidth } from './kit';
 import { niceStep } from '../domain/calc';
-import { dateFr, num, NBSP, price as fmtPrice, qty as fmtQty, usd, usdSigned, MONTHS_ABBR as MONTHS } from '../domain/format';
+import { dateFr, dateTimeFr, num, NBSP, price as fmtPrice, qty as fmtQty, timeFr, usd, usdSigned, MONTHS_ABBR as MONTHS } from '../domain/format';
 const AXIS = 48; // largeur réservée aux graduations à droite
 
 function hoverFromEvent(ev: React.PointerEvent<HTMLDivElement>, n: number): number {
@@ -21,7 +21,11 @@ export function axisUsd(v: number, step = v): string {
   return num(v, d, d) + NBSP + '$';
 }
 
+/** Point horodaté (« 2026-10-28T14:05:00Z ») plutôt que quotidien (« 2026-10-28 »). */
+const isTimed = (d: string) => d.length > 10;
+
 function dateTick(d: string, days: number): string {
+  if (isTimed(d) && days <= 2) return timeFr(d);
   return days <= 100 ? d.slice(8, 10) + '/' + d.slice(5, 7) : MONTHS[+d.slice(5, 7) - 1] + ' ' + d.slice(2, 4);
 }
 
@@ -97,7 +101,11 @@ export function PriceChart({ history, start, markers, pru, color, label, log, em
     yTicks.push(<span key={v} className="tick" style={{ left: W + 6, top: y - 9 }}>{axisUsd(v, tstep)}</span>);
   }
   const dates = history.map((p) => p[0]);
-  const mk = markers.map((m) => ({ i: history.findIndex((p) => p[0] >= m.date.slice(0, 10)), m })).filter((x) => x.i >= s && x.i <= e);
+  // repères d'achat / vente : seulement ceux qui tombent dans la période affichée
+  const timed = isTimed(history[0][0]);
+  const key = (d: string) => (timed ? d : d.slice(0, 10));
+  const mk = markers.filter((m) => key(m.date) >= key(history[s][0]) && key(m.date) <= key(history[e][0]) + (timed ? '' : '\uffff'))
+    .map((m) => ({ i: Math.max(s, history.findIndex((p) => key(p[0]) >= key(m.date))), m })).filter((x) => x.i >= s && x.i <= e);
   let h = hover;
   if (h === null || h < s || h > e) h = e;
   const hm = mk.filter((x) => x.i === h);
@@ -133,7 +141,7 @@ export function PriceChart({ history, start, markers, pru, color, label, log, em
       ))}
       <div className="hit" style={{ width: W, height: B }} onPointerMove={(ev) => setHover(s + hoverFromEvent(ev, e - s + 1))} onPointerDown={(ev) => setHover(s + hoverFromEvent(ev, e - s + 1))} />
       <div role="status" className="tip" data-component="ChartTooltip" style={{ minWidth: 120, maxWidth: 170, whiteSpace: 'normal', left: tipLeft, top: tipTop }}>
-        <span className="t-caption c-reverse-muted">{dateFr(history[h][0])}</span>
+        <span className="t-caption c-reverse-muted">{timed ? dateTimeFr(history[h][0]) : dateFr(history[h][0])}</span>
         <span className="t-amount-s" style={{ color: 'var(--text-reverse)' }}>{fmtPrice(history[h][1])}</span>
         {hm.slice(0, 3).map((x, k) => <span key={k} className="t-caption-strong" style={{ color: 'var(--brand-light)' }}>{x.m.side === 'buy' ? 'Achat' : 'Vente'} : {fmtQty(x.m.qty)}{x.m.price ? ' à ' + fmtPrice(x.m.price) : ''}</span>)}
       </div>

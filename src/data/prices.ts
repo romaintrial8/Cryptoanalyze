@@ -236,6 +236,45 @@ export async function loadHistories(first?: string): Promise<void> {
   }
 }
 
+// ------------------------------------------------------------------ cours intrajournaliers
+// API publique CoinGecko : 1 jour → un point toutes les 5 min ; 7 jours → un point par heure. Gardés en mémoire seulement.
+const intra = new Map<string, { at: number; pts: [string, number][] }>();
+const intraLoading = new Set<string>();
+let intraVersion = 0;
+const intraListeners = new Set<() => void>();
+export function useIntradayVersion(): number {
+  return useSyncExternalStore((l) => { intraListeners.add(l); return () => intraListeners.delete(l); }, () => intraVersion);
+}
+/** Points horodatés (ISO) d'une crypto sur 1 ou 7 jours, s'ils sont chargés. */
+export function intradayOf(symbol: string, days: 1 | 7): [string, number][] | undefined {
+  const id = coinIdOf(symbol);
+  return id ? intra.get(id + '|' + days)?.pts : undefined;
+}
+export function intradayLoading(symbol: string, days: 1 | 7): boolean {
+  const id = coinIdOf(symbol);
+  return !!id && intraLoading.has(id + '|' + days);
+}
+/** Charge (au plus toutes les 60 s pour 1 jour, 10 min pour 7 jours) les cours fins d'une crypto. */
+export async function loadIntraday(symbol: string, days: 1 | 7, force = false): Promise<void> {
+  const id = coinIdOf(symbol);
+  if (!id || isUsdStable(symbol)) return;
+  const k = id + '|' + days;
+  const cur = intra.get(k);
+  if (intraLoading.has(k) || (!force && cur && Date.now() - cur.at < (days === 1 ? 60e3 : 600e3))) return;
+  intraLoading.add(k);
+  intraVersion++; intraListeners.forEach((l) => l());
+  try {
+    const r = (await getJson(`${API}/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=${days}`)) as { prices?: [number, number][] };
+    const pts = (r.prices || []).filter(([, p]) => isFinite(p)).map(([ms, p]) => [new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z'), p] as [string, number]);
+    if (pts.length) intra.set(k, { at: Date.now(), pts });
+  } catch (e) {
+    set({ histError: (e as Error).message });
+  } finally {
+    intraLoading.delete(k);
+    intraVersion++; intraListeners.forEach((l) => l());
+  }
+}
+
 /** Démarrage : cours à l'ouverture, puis toutes les 5 minutes tant que l'app est visible. */
 export function startAutoRefresh(): void {
   setTimeout(() => void refreshPrices({ force: true }), 300);
